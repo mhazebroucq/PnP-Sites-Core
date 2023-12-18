@@ -1,5 +1,8 @@
-﻿using Microsoft.SharePoint.Client;
+﻿using Microsoft.Graph;
+using Microsoft.IdentityModel.Web;
+using Microsoft.SharePoint.Client;
 using Newtonsoft.Json.Linq;
+using OfficeDevPnP.Core.IdentityModel.TokenProviders.ADFS;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -26,12 +29,12 @@ namespace OfficeDevPnP.Core.Utilities
                 handler.Credentials = context.Credentials;
                 handler.CookieContainer.SetCookies(new Uri(context.Web.Url), spCred.GetAuthenticationCookie(new Uri(context.Web.Url)));
             }
-            else 
-#endif            
+            else
+#endif
             if (context.Credentials == null)
             {
                 var cookieString = CookieReader.GetCookie(context.Web.Url)?.Replace("; ", ",")?.Replace(";", ",");
-                if(cookieString == null)
+                if (cookieString == null)
                 {
                     return;
                 }
@@ -53,6 +56,20 @@ namespace OfficeDevPnP.Core.Utilities
                 }
                 handler.CookieContainer = authCookiesContainer;
             }
+            else
+            {
+                if (handler.CookieContainer == null || handler.CookieContainer.Count == 0)
+                {
+                    var authCookiesContainer = new System.Net.CookieContainer();
+                    OfficeDevPnP.Core.AuthenticationManager.GetAdfsConfigurationFromTargetUri(new Uri(context.Url), null, out string adfsHost, out string adfsRelyingParty);
+                    var networkCreds = context.Credentials.GetCredential(new Uri(context.Url), context.AuthenticationMode.ToString());
+                    var fedAuth = new UsernameMixed().GetFedAuthCookie(context.Url, $"{networkCreds.Domain}\\{networkCreds.UserName}", networkCreds.Password, new Uri($"https://{adfsHost}/adfs/services/trust/13/usernamemixed"), adfsRelyingParty, 10);
+                    if (fedAuth != null)
+                    {
+                        handler.CookieContainer = fedAuth;
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -61,7 +78,7 @@ namespace OfficeDevPnP.Core.Utilities
         /// <param name="web">The current web to execute the request against</param>
         /// <param name="endpoint">The full endpoint url, exluding the URL of the web, e.g. /_api/web/lists</param>
         /// <returns></returns>
-        internal static async Task<string> ExecuteGetAsync(this Web web, string endpoint, string cultureLanguageName=null)
+        internal static async Task<string> ExecuteGetAsync(this Web web, string endpoint, string cultureLanguageName = null)
         {
             string returnObject = null;
             var accessToken = web.Context.GetAccessToken();
@@ -115,7 +132,7 @@ namespace OfficeDevPnP.Core.Utilities
                             {
 
                                 returnObject = responseString;
-                        
+
                             }
                             catch { }
                         }
